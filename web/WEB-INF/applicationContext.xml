@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xmlns:context="http://www.springframework.org/schema/context"
+       xmlns:jdbc="http://www.springframework.org/schema/jdbc"
+       xmlns:jee="http://www.springframework.org/schema/jee"
+       xmlns:tx="http://www.springframework.org/schema/tx"
+       xmlns:aop="http://www.springframework.org/schema/aop"
+       xmlns:mvc="http://www.springframework.org/schema/mvc"
+       xmlns:util="http://www.springframework.org/schema/util"
+       xmlns:cache="http://www.springframework.org/schema/cache"
+       xsi:schemaLocation="
+		http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd
+		http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context.xsd
+		http://www.springframework.org/schema/jdbc http://www.springframework.org/schema/jdbc/spring-jdbc.xsd
+		http://www.springframework.org/schema/jee http://www.springframework.org/schema/jee/spring-jee.xsd
+		http://www.springframework.org/schema/tx http://www.springframework.org/schema/tx/spring-tx.xsd
+		http://www.springframework.org/schema/aop http://www.springframework.org/schema/aop/spring-aop.xsd
+		http://www.springframework.org/schema/mvc http://www.springframework.org/schema/mvc/spring-mvc.xsd
+		http://www.springframework.org/schema/cache http://www.springframework.org/schema/cache/spring-cache.xsd
+		http://www.springframework.org/schema/util http://www.springframework.org/schema/util/spring-util.xsd">
+    <!-- 开启注解 -->
+    <mvc:annotation-driven/>
+    <!-- 开启扫描包 -->
+    <context:component-scan base-package="com"/>
+    <!-- 注解事务 -->
+    <tx:annotation-driven/>
+    <!-- 配置数据源 c3p0 -->
+    <bean id="dataSource" class="com.mchange.v2.c3p0.ComboPooledDataSource">
+        <property name="user" value="root"/>
+        <property name="password" value="1234"/>
+        <property name="driverClass" value="com.mysql.jdbc.Driver"/>
+        <property name="jdbcUrl" value="jdbc:mysql:///test"/>
+        <property name="initialPoolSize" value="10"/>
+        <property name="maxPoolSize" value="15"/>
+    </bean>
+    <!-- 配置 Hibernate 的 SessionFactory 实例: 通过 Spring 提供的 LocalSessionFactoryBean 进行配置 -->
+    <bean id="sessionFactory" class="org.springframework.orm.hibernate5.LocalSessionFactoryBean">
+        <!-- 配置数据源属性 -->
+        <property name="dataSource" ref="dataSource"/>
+        <!-- 使用 hibernateProperties 属相来配置 Hibernate 原生的属性 -->
+        <property name="hibernateProperties">
+            <props>
+                <prop key="hibernate.dialect">org.hibernate.dialect.MySQL5InnoDBDialect</prop>
+                <prop key="hibernate.show_sql">true</prop>
+                <prop key="hibernate.format_sql">true</prop>
+                <prop key="hibernate.hbm2ddl.auto">update</prop>
+                <!-- 启用二级缓存 -->
+                <prop key="cache.use_second_level_cache">true</prop>
+                <!-- 配置使用的二级缓存的产品 -->
+                <prop key="hibernate.cache.region.factory_class">org.hibernate.cache.ehcache.internal.EhcacheRegionFactory</prop>
+                <!-- 配置启用查询缓存 -->
+                <prop key="cache.use_query_cache">true</prop>
+            </props>
+        </property>
+        <!-- 配置 hibernate 实体类文件的位置 -->
+        <property name="packagesToScan" value="com.entity" ></property>
+        <!--
+        1.配置.hbm.xml文件 mappingLocations
+        2.配置实体类 annotatedClasses
+        3.扫实体类的包 packagesToScan
+        -->
+    </bean>
+    <!-- 配置 Spring 的声明式事务 -->
+    <!-- 1. 配置事务管理器 -->
+    <bean id="transactionManager" class="org.springframework.orm.hibernate5.HibernateTransactionManager">
+        <property name="sessionFactory" ref="sessionFactory"></property>
+    </bean>
+    <!-- 使用sprring提供的HibernateTemplate -->
+    <bean id="hibernateTemplate" class="org.springframework.orm.hibernate5.HibernateTemplate">
+        <property name="sessionFactory" ref="sessionFactory" ></property>
+        <property name="cacheQueries" value="true"></property>
+    </bean>
+    <!-- 2. 配置事务属性, 需要事务管理器 -->
+    <tx:advice id="txAdvice" transaction-manager="transactionManager">
+          <tx:attributes>
+              <tx:method name="find*" propagation="REQUIRED" read-only="true"/>
+              <tx:method name="add*" propagation="REQUIRED"/>
+              <tx:method name="update*" propagation="REQUIRED"/>
+              <tx:method name="delete*" propagation="REQUIRED"/>
+              <tx:method name="*" propagation="REQUIRED" read-only="true"/>
+          </tx:attributes>
+      </tx:advice>
+
+    <!--声明式事务注解版-->
+    <tx:annotation-driven transaction-manager="transactionManager"></tx:annotation-driven>
+    <aop:config>
+        <aop:advisor
+                pointcut="execution(* com.service.impl.*.*(..))"
+                advice-ref="txAdvice"/>
+    </aop:config>
+
+    <bean id="cacheManagerFactory"
+          class="org.springframework.cache.ehcache.EhCacheManagerFactoryBean">
+        <property name="configLocation" value="classpath:ehcache.xml" />
+        <property name="shared" value="true"/>
+    </bean>
+
+    <bean id="cacheManager" class="org.springframework.cache.ehcache.EhCacheCacheManager">
+        <property name="cacheManager" ref="cacheManagerFactory" />
+    </bean>
+    <cache:annotation-driven cache-manager="cacheManager"  />
+
+
+</beans>
